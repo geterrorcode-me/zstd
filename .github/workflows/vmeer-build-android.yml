@@ -50,15 +50,22 @@ jobs:
           # 4. Compile
           make -j$(nproc)
 
-      - name: Prepare Output Folder
-        run: |
+            - name: Prepare Output Folder
+          run: |
           mkdir -p vmeer-dist/libs/arm64-v8a
           mkdir -p vmeer-dist/include
-          # Sesuaikan lokasi file hasil build zstd
+          
+          # 1. Salin Library Statis
           cp build-android/lib/libzstd.a vmeer-dist/libs/arm64-v8a/
+          
+          # 2. Salin Header Utama (Gunakan wildcard untuk menghindari error path)
           cp lib/zstd.h vmeer-dist/include/
-          cp lib/zdict.h vmeer-dist/include/
-          cp lib/zerrors.h vmeer-dist/include/
+          
+          # 3. Salin Header tambahan jika ada, jika tidak ada jangan gagalkan build
+          [ -f lib/zdict.h ] && cp lib/zdict.h vmeer-dist/include/ || echo "zdict.h not found, skipping"
+          
+          # Cari zerrors.h di lokasi umum (lib/ atau lib/common/)
+          find lib -name "zerrors.h" -exec cp {} vmeer-dist/include/ \; || echo "zerrors.h not found, skipping"
 
       - name: Upload vMeer Zstd Artifact
         uses: actions/upload-artifact@v4
