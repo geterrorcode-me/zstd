@@ -50,22 +50,32 @@ jobs:
           # 4. Compile
           make -j$(nproc)
 
-            - name: Prepare Output Folder
+              - name: Prepare Output Folder
           run: |
           mkdir -p vmeer-dist/libs/arm64-v8a
           mkdir -p vmeer-dist/include
           
-          # 1. Salin Library Statis
+          # 1. Salin Library Statis hasil build
           cp build-android/lib/libzstd.a vmeer-dist/libs/arm64-v8a/
           
-          # 2. Salin Header Utama (Gunakan wildcard untuk menghindari error path)
-          cp lib/zstd.h vmeer-dist/include/
+          # 2. Koleksi Header (Smart Search)
+          # Kita ambil header utama dan header krusial lainnya secara otomatis
+          echo "Collecting headers..."
           
-          # 3. Salin Header tambahan jika ada, jika tidak ada jangan gagalkan build
-          [ -f lib/zdict.h ] && cp lib/zdict.h vmeer-dist/include/ || echo "zdict.h not found, skipping"
+          # Salin zstd.h (pasti ada di folder lib/)
+          find lib -maxdepth 2 -name "zstd.h" -exec cp {} vmeer-dist/include/ \;
           
-          # Cari zerrors.h di lokasi umum (lib/ atau lib/common/)
-          find lib -name "zerrors.h" -exec cp {} vmeer-dist/include/ \; || echo "zerrors.h not found, skipping"
+          # Salin zdict.h (sering dipakai untuk dictionary compression)
+          find lib -name "zdict.h" -exec cp {} vmeer-dist/include/ \;
+          
+          # Salin zstd_errors.h (ini nama standar di versi baru, bukan zerrors.h)
+          find lib -name "zstd_errors.h" -exec cp {} vmeer-dist/include/ \;
+          
+          # Jika ada file header lain yang diawali zstd di folder common/
+          find lib/common -name "zstd_*.h" -exec cp {} vmeer-dist/include/ \; 2>/dev/null || true
+
+          echo "Final Include List:"
+          ls vmeer-dist/include/
 
       - name: Upload vMeer Zstd Artifact
         uses: actions/upload-artifact@v4
