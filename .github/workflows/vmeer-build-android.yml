@@ -9,72 +9,44 @@ jobs:
     steps:
       - name: Checkout Source Code
         uses: actions/checkout@v4
-        
+
       - name: Build with Pre-installed NDK
         run: |
-          # 1. Cari lokasi NDK secara dinamis
-          # GitHub runner biasanya menyimpan beberapa versi di $ANDROID_SDK_ROOT/ndk/
+          # 1. Mencari lokasi NDK terbaru di Runner
           NDK_PATH=$(ls -d $ANDROID_SDK_ROOT/ndk/* | tail -1)
           TOOLCHAIN_FILE="$NDK_PATH/build/cmake/android.toolchain.cmake"
           
           echo "Using NDK found at: $NDK_PATH"
-          echo "Toolchain file: $TOOLCHAIN_FILE"
-
-          if [ ! -f "$TOOLCHAIN_FILE" ]; then
-            echo "❌ Error: Toolchain file tidak ditemukan di $TOOLCHAIN_FILE"
-            exit 1
-          fi
           
           # 2. Persiapkan Folder Build
-          mkdir build-android
+          mkdir -p build-android
           cd build-android
           
-          # 3. Konfigurasi CMake dengan Ninja (lebih stabil di CI)
-          # Gunakan -G"Unix Makefiles" jika ingin tetap pakai make
-          cmake -G"Unix Makefiles" \
-                -DCMAKE_TOOLCHAIN_FILE="$TOOLCHAIN_FILE" \
-                -DANDROID_ABI=arm64-v8a \
-                -DANDROID_PLATFORM=android-24 \
-                -DZSTD_BUILD_STATIC=ON \
-                -DZSTD_BUILD_SHARED=OFF \
-                -DZSTD_BUILD_PROGRAMS=OFF \
-                -DZSTD_BUILD_CONTRIB=OFF \
-                -DZSTD_BUILD_TESTS=OFF \
-                -DCMAKE_BUILD_TYPE=Release \
-                ../build/cmake
-          
-          # 4. Compile
+          # 3. Jalankan CMake dalam satu baris untuk menghindari error dash/backslash
+          cmake -G"Unix Makefiles" -DCMAKE_TOOLCHAIN_FILE="$TOOLCHAIN_FILE" -DANDROID_ABI=arm64-v8a -DANDROID_PLATFORM=android-24 -DZSTD_BUILD_STATIC=ON -DZSTD_BUILD_SHARED=OFF -DZSTD_BUILD_PROGRAMS=OFF -DZSTD_BUILD_CONTRIB=OFF -DZSTD_BUILD_TESTS=OFF -DCMAKE_BUILD_TYPE=Release ../build/cmake
+
+          # 4. Compile menggunakan semua core CPU yang tersedia
           make -j$(nproc)
 
-          
-          # 4. Compile
-          make -j$(nproc)
-
-              - name: Prepare Output Folder
-          run: |
+      - name: Prepare Output Folder
+        run: |
+          # Buat struktur folder distribusi
           mkdir -p vmeer-dist/libs/arm64-v8a
           mkdir -p vmeer-dist/include
           
-          # 1. Salin Library Statis hasil build
+          # Salin Library Statis (.a)
           cp build-android/lib/libzstd.a vmeer-dist/libs/arm64-v8a/
           
-          # 2. Koleksi Header (Smart Search)
-          # Kita ambil header utama dan header krusial lainnya secara otomatis
+          # Gunakan 'find' untuk mengambil header utama secara aman
           echo "Collecting headers..."
-          
-          # Salin zstd.h (pasti ada di folder lib/)
           find lib -maxdepth 2 -name "zstd.h" -exec cp {} vmeer-dist/include/ \;
-          
-          # Salin zdict.h (sering dipakai untuk dictionary compression)
           find lib -name "zdict.h" -exec cp {} vmeer-dist/include/ \;
-          
-          # Salin zstd_errors.h (ini nama standar di versi baru, bukan zerrors.h)
           find lib -name "zstd_errors.h" -exec cp {} vmeer-dist/include/ \;
           
-          # Jika ada file header lain yang diawali zstd di folder common/
+          # Salin header tambahan dari common jika ada
           find lib/common -name "zstd_*.h" -exec cp {} vmeer-dist/include/ \; 2>/dev/null || true
 
-          echo "Final Include List:"
+          echo "Include folder content:"
           ls vmeer-dist/include/
 
       - name: Upload vMeer Zstd Artifact
@@ -82,3 +54,4 @@ jobs:
         with:
           name: libzstd-vmeer-arm64
           path: vmeer-dist/
+          
