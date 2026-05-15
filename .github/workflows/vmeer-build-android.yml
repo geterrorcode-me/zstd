@@ -9,21 +9,30 @@ jobs:
     steps:
       - name: Checkout Source Code
         uses: actions/checkout@v4
-
+        
       - name: Build with Pre-installed NDK
         run: |
-          # 1. Tentukan lokasi NDK bawaan GitHub Runner
-          export ANDROID_NDK_HOME=$ANDROID_SDK_ROOT/ndk-bundle
-          export TOOLCHAIN=$ANDROID_NDK_HOME/build/cmake/android.toolchain.cmake
+          # 1. Cari lokasi NDK secara dinamis
+          # GitHub runner biasanya menyimpan beberapa versi di $ANDROID_SDK_ROOT/ndk/
+          NDK_PATH=$(ls -d $ANDROID_SDK_ROOT/ndk/* | tail -1)
+          TOOLCHAIN_FILE="$NDK_PATH/build/cmake/android.toolchain.cmake"
           
-          echo "Using NDK at: $ANDROID_NDK_HOME"
+          echo "Using NDK found at: $NDK_PATH"
+          echo "Toolchain file: $TOOLCHAIN_FILE"
+
+          if [ ! -f "$TOOLCHAIN_FILE" ]; then
+            echo "❌ Error: Toolchain file tidak ditemukan di $TOOLCHAIN_FILE"
+            exit 1
+          fi
           
           # 2. Persiapkan Folder Build
           mkdir build-android
           cd build-android
           
-          # 3. Konfigurasi CMake
-          cmake -DCMAKE_TOOLCHAIN_FILE=$TOOLCHAIN \
+          # 3. Konfigurasi CMake dengan Ninja (lebih stabil di CI)
+          # Gunakan -G"Unix Makefiles" jika ingin tetap pakai make
+          cmake -G"Unix Makefiles" \
+                -DCMAKE_TOOLCHAIN_FILE="$TOOLCHAIN_FILE" \
                 -DANDROID_ABI=arm64-v8a \
                 -DANDROID_PLATFORM=android-24 \
                 -DZSTD_BUILD_STATIC=ON \
@@ -33,6 +42,10 @@ jobs:
                 -DZSTD_BUILD_TESTS=OFF \
                 -DCMAKE_BUILD_TYPE=Release \
                 ../build/cmake
+          
+          # 4. Compile
+          make -j$(nproc)
+
           
           # 4. Compile
           make -j$(nproc)
