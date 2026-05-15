@@ -1,49 +1,48 @@
 name: vMeer Zstd Android Build
 
 on:
-  workflow_dispatch: # Membolehkan anda menjalankan build secara manual
+  workflow_dispatch:
 
 jobs:
   build-android:
     runs-on: ubuntu-latest
-    strategy:
-      matrix:
-        # Kita fokus pada arm64-v8a untuk prestasi Dimensity 8300 Ultra
-        abi: [arm64-v8a]
-        api_level: [24] # Minimum API 24 (Android 7.0+)
-
     steps:
       - name: Checkout Source Code
         uses: actions/checkout@v4
 
-      - name: Setup Android NDK
-        uses: nndk/setup-ndk@v0
-        with:
-          ndk-version: r26b # Versi stabil yang serasi dengan r26d anda
-          add-to-path: true
-
-      - name: Build Static Library (.a)
+      - name: Build with Pre-installed NDK
         run: |
+          # 1. Tentukan lokasi NDK bawaan GitHub Runner
+          export ANDROID_NDK_HOME=$ANDROID_SDK_ROOT/ndk-bundle
+          export TOOLCHAIN=$ANDROID_NDK_HOME/build/cmake/android.toolchain.cmake
+          
+          echo "Using NDK at: $ANDROID_NDK_HOME"
+          
+          # 2. Persiapkan Folder Build
           mkdir build-android
           cd build-android
-          cmake -DCMAKE_TOOLCHAIN_FILE=$ANDROID_NDK_HOME/build/cmake/android.toolchain.cmake \
-                -DANDROID_ABI=${{ matrix.abi }} \
-                -DANDROID_PLATFORM=android-${{ matrix.api_level }} \
+          
+          # 3. Konfigurasi CMake
+          cmake -DCMAKE_TOOLCHAIN_FILE=$TOOLCHAIN \
+                -DANDROID_ABI=arm64-v8a \
+                -DANDROID_PLATFORM=android-24 \
                 -DZSTD_BUILD_STATIC=ON \
                 -DZSTD_BUILD_SHARED=OFF \
                 -DZSTD_BUILD_PROGRAMS=OFF \
                 -DZSTD_BUILD_CONTRIB=OFF \
                 -DZSTD_BUILD_TESTS=OFF \
-                -DZSTD_LEGACY_SUPPORT=OFF \
                 -DCMAKE_BUILD_TYPE=Release \
                 ../build/cmake
+          
+          # 4. Compile
           make -j$(nproc)
 
       - name: Prepare Output Folder
         run: |
-          mkdir -p vmeer-dist/libs/${{ matrix.abi }}
+          mkdir -p vmeer-dist/libs/arm64-v8a
           mkdir -p vmeer-dist/include
-          cp build-android/lib/libzstd.a vmeer-dist/libs/${{ matrix.abi }}/
+          # Sesuaikan lokasi file hasil build zstd
+          cp build-android/lib/libzstd.a vmeer-dist/libs/arm64-v8a/
           cp lib/zstd.h vmeer-dist/include/
           cp lib/zdict.h vmeer-dist/include/
           cp lib/zerrors.h vmeer-dist/include/
@@ -51,6 +50,5 @@ jobs:
       - name: Upload vMeer Zstd Artifact
         uses: actions/upload-artifact@v4
         with:
-          name: libzstd-android-${{ matrix.abi }}
+          name: libzstd-vmeer-arm64
           path: vmeer-dist/
-          
